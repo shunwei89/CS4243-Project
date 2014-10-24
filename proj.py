@@ -2,8 +2,8 @@ import cv2
 import Tkinter as TK
 import ImageTk as iTK
 import Image as i
-
-
+import numpy
+import ImageDraw
 
 class Gui(TK.Frame):
     
@@ -12,6 +12,7 @@ class Gui(TK.Frame):
         self.grid()
         self.objLst = []
         self.currentLst = []
+        self.lst = []
         self.create_widgets()
 
     def clickCallback(self,event):
@@ -22,20 +23,65 @@ class Gui(TK.Frame):
              self.canvas.create_line(self.currentLst[-2].x, self.currentLst[-2].y,self.currentLst[-1].x,self.currentLst[-1].y)
 
     def create_widgets(self):
-        im = i.open('project.jpeg')
+        # read image as RGB and add alpha (transparency)
+        im = i.open('project.jpeg').convert("RGBA")
+               
         self.cv2Img = cv2.imread('project.jpeg')
         image = im.resize((650, 500), i.ANTIALIAS)
         self.img = iTK.PhotoImage(image)
-        #self.img = self.img.subsample(2,2)
+
+        # convert to numpy (for convenience)
+        imArray = numpy.asarray(im)
+
         self.canvas = TK.Canvas(self,width=650,height=500)
         self.canvas.create_image(325,250,imag=self.img)
         #self.canvas.itemconfigure(self.img,state=NORMAL)
         self.canvas.grid()
         self.canvas.bind("<Button 1>",self.clickCallback)
         self.button=TK.Button(self)
-        self.button["text"]="join"
-        self.button["command"]=self.joinPoints
+        #self.button["text"]="join"
+        self.button["text"]="Generate Mask"
+        #self.button["command"]=self.joinPoints
+        self.button["command"]=self.generateMask
         self.button.grid()
+
+
+    def generateMask(self):
+        # create mask
+        im = i.open('project.jpeg').convert("RGBA")
+        # convert to numpy (for convenience)
+        imArray = numpy.asarray(im)
+
+        #polygon = [(444,203),(623,243),(691,177),(581,26),(482,42)]
+        maskIm = i.new('L', (imArray.shape[1], imArray.shape[0]), 0)
+        ImageDraw.Draw(maskIm).polygon(self.currentLst, outline=1, fill=1)
+        mask = numpy.array(maskIm)
+        '''
+        # assemble new image (uint8: 0-255)
+        newImArray = numpy.empty(imArray.shape,dtype='uint8')
+
+        # colors (three first columns, RGB)
+        newImArray[:,:,:3] = imArray[:,:,:3]
+
+        # transparency (4th column)
+        newImArray[:,:,3] = mask*255
+
+        # back to Image from numpy
+        newIm = Image.fromarray(newImArray, "RGBA")
+        newIm.save("out.png")
+        
+       #COMMAND AWAY
+       for i in range(len(self.currentLst)):
+            s = (self.currentLst[i].x),(self.currentLst[i].y),"," 
+            print s
+
+        maskIm = Image.new('L', (imArray.shape[1], imArray.shape[0]), 0)
+        ImageDraw.Draw(maskIm).polygon(polygon, outline=1, fill=1)
+        mask = numpy.array(maskIm)
+        
+
+
+
 
     def joinPoints(self):
         if(len(self.currentLst)>2):
@@ -68,7 +114,7 @@ class Gui(TK.Frame):
                 N = self.currentLst[i].y
         return (N,S,W,E)
 
-    
+    '''
 
 root = TK.Tk()
 root.title("label")
