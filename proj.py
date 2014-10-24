@@ -47,6 +47,7 @@ class Gui(TK.Frame):
 			self.canvas.create_line(self.currentLst[-1][0], self.currentLst[-1][1],self.currentLst[0][0],self.currentLst[0][1])
 			# read image as RGB and add alpha (transparency)
 			im = i.open("project.jpeg").convert("RGBA")
+			im = im.resize((650, 500), i.ANTIALIAS)
 
 			# convert to numpy (for convenience)
 			imArray = np.asarray(im)
