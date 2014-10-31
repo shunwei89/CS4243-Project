@@ -13,16 +13,20 @@ class Gui(TK.Frame):
 	        self.grid()
 	        self.objLst = []
 	        self.currentLst = []
+	        self.warpPosition = []
 	        self.create_widgets()
 	        self.cameraPosition = np.matrix(np.zeros([1,3]))
 
 	def clickCallback(self,event):
 		print (event.x,event.y)
-		depth = tkSimpleDialog.askinteger("Depth", "Please enter the depth.")
-		if depth != None:
-	         	print depth
+		x = tkSimpleDialog.askinteger("x - Axis", "Please enter the x-axis value.")
+		y = tkSimpleDialog.askinteger("y - Axis", "Please enter the y-axis value.")
+		z = tkSimpleDialog.askinteger("z - Axis", "Please enter the z-axis value.")
+		
+		if x != None and y != None and z != None:
 			self.canvas.create_rectangle(event.x-1,event.y-1,event.x+1,event.y+1)
-			self.currentLst.append(np.array([event.x, event.y, depth]))
+			self.currentLst.append(np.array([event.x, event.y]))
+			self.warpPosition.append(np.array([x, y, z]))
 			if len(self.currentLst)>1:
 				self.canvas.create_line(self.currentLst[-2][0], self.currentLst[-2][1],self.currentLst[-1][0],self.currentLst[-1][1])
 
@@ -41,7 +45,82 @@ class Gui(TK.Frame):
 		self.button["text"]="join"
 		self.button["command"]=self.joinPoints
 		self.button.grid()
-				
+		self.button=TK.Button(self)
+		self.button["text"]="Homography Matrix"
+		self.button["command"]=self.homographyMatrix
+		self.button.grid()
+	
+	def homographyMatrix(self):
+		
+		currentPosition = np.transpose(np.matrix(np.array(self.currentLst)))
+		
+		temp = np.array(self.warpPosition)
+		newPoisition = np.ones([len(temp[:, 0]), len(temp[0, :]) - 1])
+		for j in range(len(temp[0, :]) - 1):
+			newPoisition[:, j] = temp[:, j]
+		
+		newPosition = np.transpose(np.matrix(newPoisition))
+		print "newPosition = \n", newPosition
+		print "currentPosition = \n", currentPosition
+		
+		homographyMatrix = self.findHomography(currentPosition, newPosition)
+		print "homographyMatrix = \n", homographyMatrix
+	
+	def findHomography(self, currentPosition, newPosition):
+		if currentPosition.shape[1] != newPosition.shape[1]:
+			return "Points matrices different in sizes."
+		
+		if newPosition.shape[0] != 2:
+			return "Points matrices must have two rows."
+
+		if newPosition.shape[1] < 4:
+			return "Need at least 4 matching points." 
+	
+		# Solve equations using Singular Values Decomposition (SVD)
+		x = newPosition[0, :]
+		y = newPosition[1, :]
+		x_prime = currentPosition[0, :]
+		y_prime = currentPosition[1, :]
+		
+		h = []
+		for j in range(0, newPosition.shape[1]):
+			row1 = np.array([[newPosition[0, j], newPosition[1, j], 1, 0, 0, 0, -1 * newPosition[0, j] * currentPosition[0, j], -1 * newPosition[1, j] * currentPosition[0, j], -1 * currentPosition[0, j]]])
+			row2 = np.array([[0, 0, 0, newPosition[0, j], newPosition[1, j], 1, -1 * newPosition[0, j] * currentPosition[1, j], -1 * newPosition[1, j] * currentPosition[1, j], -1 * currentPosition[1, j]]])
+			row12 = np.concatenate([row1, row2])
+
+			if j == 0:
+				h = row12
+			else:
+				h = np.concatenate((h, row12))
+		
+		'''
+		rowsZero = np.matrix(np.zeros([3, newPosition.shape[1]]))
+		rowsXY = np.matrix(np.ones([3, newPosition.shape[1]])) * -1
+		rowsXY[0] = x
+		rowsXY[1] = y
+
+		a = np.array(x) * np.array(x_prime)
+		b = np.array(x) * np.array(y_prime)
+		hx = np.concatenate((rowsXY, rowsZero, a, b, x))
+		
+		a = np.array(y) * np.array(x_prime)
+		b = np.array(y) * np.array(y_prime)
+		hy = np.concatenate((rowsZero, rowsXY, a, b, y))
+		
+		print "hx.T = \n", hx.T
+		print "hy.T = \n", hy.T
+		
+		h = np.concatenate((hx.T, hy.T))
+		
+		print "h = \n", h
+		'''
+		
+		U, s, V = np.linalg.svd(h)
+
+		homographyMatrix = np.reshape(V[:, 8], (3, 3))
+		
+		return homographyMatrix
+		
 	def joinPoints(self):
 		if(len(self.currentLst)>2):
 			self.canvas.create_line(self.currentLst[-1][0], self.currentLst[-1][1],self.currentLst[0][0],self.currentLst[0][1])
@@ -75,7 +154,7 @@ class Gui(TK.Frame):
 			newIm.save("out.png")
 			
 			self.objLst.append(self.currentLst)
-			self.currentLst=[]
+			# self.currentLst=[]
 	'''
 	def joinPointsOriginal(self):
 		if(len(self.currentLst)>2):
