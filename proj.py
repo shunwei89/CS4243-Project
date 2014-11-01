@@ -1,10 +1,13 @@
 import cv2
+import cv2.cv as cv
 import numpy as np
 import ImageDraw
 import Tkinter as TK
 import tkSimpleDialog
 import ImageTk as iTK	
 import Image as i
+
+np.set_printoptions(threshold=np.nan)
 
 class Gui(TK.Frame):
     
@@ -51,7 +54,6 @@ class Gui(TK.Frame):
 		self.button.grid()
 	
 	def homographyMatrix(self):
-		
 		currentPosition = np.transpose(np.matrix(np.array(self.currentLst)))
 		
 		temp = np.array(self.warpPosition)
@@ -60,11 +62,59 @@ class Gui(TK.Frame):
 			newPoisition[:, j] = temp[:, j]
 		
 		newPosition = np.transpose(np.matrix(newPoisition))
+				
 		print "newPosition = \n", newPosition
 		print "currentPosition = \n", currentPosition
 		
 		homographyMatrix = self.findHomography(currentPosition, newPosition)
+		
 		print "homographyMatrix = \n", homographyMatrix
+		
+		# Perform transformation using the Homograhy matrix
+		outImage = i.open("out.png").convert("RGBA")
+		pixels = outImage.load()
+		
+		left = currentPosition[0, :].min()
+		right = currentPosition[0, :].max()
+		top = currentPosition[1, :].min()
+		bottom = currentPosition[1, :].max()
+		
+		currentPoints = []
+		currentPointsColor = []
+		for y in range(top, bottom + 1):
+			for x in range(left, right + 1):
+				if pixels[x, y][3] != 0:
+					currentPoints.append((x, y))
+					currentPointsColor.append((pixels[x, y][0], pixels[x, y][1], pixels[x, y][2]))
+		
+		currentPoints = np.transpose(np.matrix(np.array(currentPoints)))
+		currentPointsColor = np.transpose(np.matrix(np.array(currentPointsColor)))
+
+		print "currentPoints = \n", currentPoints
+		
+		newPoints = self.homographyWarp(currentPoints, homographyMatrix)
+		
+	def homographyWarp(self, currentPoints, homographyMatrix):
+		x = currentPoints[0, :]
+		y = currentPoints[1, :]
+		
+		currentPoints = np.matrix(np.ones([3, currentPoints.shape[1]]))
+		currentPoints[0] = x
+		currentPoints[1] = y
+		
+		newPoints = np.matrix(homographyMatrix) * np.matrix(currentPoints)
+		
+		row1 = np.array(newPoints[0,:])
+		row2 = np.array(newPoints[1,:])
+		row3 = np.array(newPoints[2,:])
+		
+		row1 = row1 / row3
+		row2 = row2 / row3
+	
+		newPoints = np.concatenate((row1, row2))
+		print "newPoints = \n", newPoints
+		
+		return newPoints
 	
 	def findHomography(self, currentPosition, newPosition):
 		if currentPosition.shape[1] != newPosition.shape[1]:
@@ -83,9 +133,10 @@ class Gui(TK.Frame):
 		y_prime = currentPosition[1, :]
 		
 		h = []
+		
 		for j in range(0, newPosition.shape[1]):
-			row1 = np.array([[newPosition[0, j], newPosition[1, j], 1, 0, 0, 0, -1 * newPosition[0, j] * currentPosition[0, j], -1 * newPosition[1, j] * currentPosition[0, j], -1 * currentPosition[0, j]]])
-			row2 = np.array([[0, 0, 0, newPosition[0, j], newPosition[1, j], 1, -1 * newPosition[0, j] * currentPosition[1, j], -1 * newPosition[1, j] * currentPosition[1, j], -1 * currentPosition[1, j]]])
+			row1 = np.array([[currentPosition[0, j], currentPosition[1, j], 1, 0, 0, 0, -1 * newPosition[0, j] * currentPosition[0, j], -1 * newPosition[0, j] * currentPosition[1, j], -1 * newPosition[0, j]]])
+			row2 = np.array([[0, 0, 0, currentPosition[0, j], currentPosition[1, j], 1, -1 * newPosition[1, j] * currentPosition[0, j], -1 * newPosition[1, j] * currentPosition[1, j], -1 * newPosition[1, j]]])
 			row12 = np.concatenate([row1, row2])
 
 			if j == 0:
@@ -93,34 +144,12 @@ class Gui(TK.Frame):
 			else:
 				h = np.concatenate((h, row12))
 		
-		'''
-		rowsZero = np.matrix(np.zeros([3, newPosition.shape[1]]))
-		rowsXY = np.matrix(np.ones([3, newPosition.shape[1]])) * -1
-		rowsXY[0] = x
-		rowsXY[1] = y
-
-		a = np.array(x) * np.array(x_prime)
-		b = np.array(x) * np.array(y_prime)
-		hx = np.concatenate((rowsXY, rowsZero, a, b, x))
+		U, s, V = np.linalg.svd(np.matrix(h))
 		
-		a = np.array(y) * np.array(x_prime)
-		b = np.array(y) * np.array(y_prime)
-		hy = np.concatenate((rowsZero, rowsXY, a, b, y))
-		
-		print "hx.T = \n", hx.T
-		print "hy.T = \n", hy.T
-		
-		h = np.concatenate((hx.T, hy.T))
-		
-		print "h = \n", h
-		'''
-		
-		U, s, V = np.linalg.svd(h)
-
-		homographyMatrix = np.reshape(V[:, 8], (3, 3))
+		homographyMatrix = np.reshape(V[8], (3, 3))
 		
 		return homographyMatrix
-		
+	
 	def joinPoints(self):
 		if(len(self.currentLst)>2):
 			self.canvas.create_line(self.currentLst[-1][0], self.currentLst[-1][1],self.currentLst[0][0],self.currentLst[0][1])
